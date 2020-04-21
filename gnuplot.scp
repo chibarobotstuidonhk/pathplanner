@@ -1,0 +1,12 @@
+
+set terminal pdf
+set output "states_wheelVel.pdf"
+set style data lines
+set multiplot
+set title 'Time-Optimal Trajectory Generation Problem: wheel velocity'
+set xlabel 'time (s)'
+set ylabel 'angular velocity[rad/s]'
+set key box
+set key outside
+plot [ ] [-32.986722:32.986722] 'XY.dat' using 1:2 title "x4" with linespoints, 'XY.dat' using 1:3 title "x5" with linespoints, 'XY.dat' using 1:4 title "x6" with linespoints, 'XY.dat' using 1:5 title "x7" with linespoints
+unset multiplot
