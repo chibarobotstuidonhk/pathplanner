@@ -16,31 +16,36 @@
 //////// General Public License (LGPL)                    ////////////////
 //////////////////////////////////////////////////////////////////////////
 
-#include "psopt.h"
 #include <GLFW/glfw3.h>
-#include "include/Field.hpp"
+#include <unistd.h>
+
 #include <fstream>
+
+#include "include/Field.hpp"
+#include "psopt.h"
 
 #define RED_ZONE
 #define USE_OPENGL
 
-adouble path_circle(adouble x, adouble y, double center_x, double center_y, double radius)
-{
-    return (pow(x - center_x, 2.0) + pow(y - center_y, 2.0)) / (radius * radius);
+adouble path_circle(adouble x, adouble y, double center_x, double center_y,
+                    double radius) {
+    return (pow(x - center_x, 2.0) + pow(y - center_y, 2.0)) /
+           (radius * radius);
 }
 
-adouble path_rectangle(adouble x, adouble y, double center_x, double center_y, double base, double height)
-{
-    return fabs((x - center_x) / base + (y - center_y) / height) + fabs((x - center_x) / base - (y - center_y) / height);
+adouble path_rectangle(adouble x, adouble y, double center_x, double center_y,
+                       double base, double height) {
+    return fabs((x - center_x) / base + (y - center_y) / height) +
+           fabs((x - center_x) / base - (y - center_y) / height);
 }
 
 //////////////////////////////////////////////////////////////////////////
 ///////////////////  Define the end point (Mayer) cost function //////////
 //////////////////////////////////////////////////////////////////////////
 
-adouble endpoint_cost(adouble *initial_states, adouble *final_states, adouble *parameters, adouble &t0, adouble &tf,
-                      adouble *xad, int iphase, Workspace *workspace)
-{
+adouble endpoint_cost(adouble *initial_states, adouble *final_states,
+                      adouble *parameters, adouble &t0, adouble &tf,
+                      adouble *xad, int iphase, Workspace *workspace) {
     return tf;
 }
 
@@ -48,47 +53,54 @@ adouble endpoint_cost(adouble *initial_states, adouble *final_states, adouble *p
 ///////////////////  Define the integrand (Lagrange) cost function  //////
 //////////////////////////////////////////////////////////////////////////
 
-adouble integrand_cost(adouble *states, adouble *controls, adouble *parameters, adouble &time, adouble *xad, int iphase,
-                       Workspace *workspace)
-{
+adouble integrand_cost(adouble *states, adouble *controls, adouble *parameters,
+                       adouble &time, adouble *xad, int iphase,
+                       Workspace *workspace) {
     double w = 0.5;
 
-    return w * (pow(controls[CINDEX(1)], 2) + pow(controls[CINDEX(2)], 2) + pow(controls[CINDEX(3)], 2) + pow(controls[CINDEX(4)], 2));
+    return w * (pow(controls[CINDEX(1)], 2) + pow(controls[CINDEX(2)], 2) +
+                pow(controls[CINDEX(3)], 2) + pow(controls[CINDEX(4)], 2));
 }
 
 //////////////////////////////////////////////////////////////////////////
 ///////////////////  Define the DAE's ////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
-void dae(adouble *derivatives, adouble *path, adouble *states, adouble *controls, adouble *parameters, adouble &time,
-         adouble *xad, int iphase, Workspace *workspace)
-{
+void dae(adouble *derivatives, adouble *path, adouble *states,
+         adouble *controls, adouble *parameters, adouble &time, adouble *xad,
+         int iphase, Workspace *workspace) {
+    adouble x1 = states[CINDEX(1)];  // world x
+    adouble x2 = states[CINDEX(2)];  // world y
+    adouble x3 = states[CINDEX(3)];  // theta
+    adouble x4 = states[CINDEX(4)];  // d/dt phi_1
+    adouble x5 = states[CINDEX(5)];  // d/dt phi_2
+    adouble x6 = states[CINDEX(6)];  // d/dt phi_3
+    adouble x7 = states[CINDEX(7)];  // d/dt phi_4
 
-    adouble x1 = states[CINDEX(1)]; // world x
-    adouble x2 = states[CINDEX(2)]; // world y
-    adouble x3 = states[CINDEX(3)]; // theta
-    adouble x4 = states[CINDEX(4)]; // d/dt phi_1
-    adouble x5 = states[CINDEX(5)]; // d/dt phi_2
-    adouble x6 = states[CINDEX(6)]; // d/dt phi_3
-    adouble x7 = states[CINDEX(7)]; // d/dt phi_4
-
-    adouble u1 = controls[CINDEX(1)]; // u_1, torque on wheel 1
-    adouble u2 = controls[CINDEX(2)]; // u_2, torque on wheel 2
-    adouble u3 = controls[CINDEX(3)]; // u_3, torque on wheel 3
-    adouble u4 = controls[CINDEX(4)]; // u_4, torque on wheel 4
+    adouble u1 = controls[CINDEX(1)];  // u_1, torque on wheel 1
+    adouble u2 = controls[CINDEX(2)];  // u_2, torque on wheel 2
+    adouble u3 = controls[CINDEX(3)];  // u_3, torque on wheel 3
+    adouble u4 = controls[CINDEX(4)];  // u_4, torque on wheel 4
 
     double M = 25.0;
     double m = 0.5;
     double R = 0.636;
     double D = 0.450;
-    double r = 0.050; // radius of the wheels
+    double r = 0.050;  // radius of the wheels
     double i = M * D * D / 6;
 
-    derivatives[CINDEX(1)] = (-(x4 * sin(x3 + M_PI / 4)) - (x5 * cos(x3 + M_PI / 4)) + (x6 * sin(x3 + M_PI / 4)) + (x7 * cos(x3 + M_PI / 4))) * r / 2;
-    derivatives[CINDEX(2)] = ((x4 * cos(x3 + M_PI / 4)) - (x5 * sin(x3 + M_PI / 4)) - (x6 * cos(x3 + M_PI / 4)) + (x7 * sin(x3 + M_PI / 4))) * r / 2;
+    derivatives[CINDEX(1)] =
+        (-(x4 * sin(x3 + M_PI / 4)) - (x5 * cos(x3 + M_PI / 4)) +
+         (x6 * sin(x3 + M_PI / 4)) + (x7 * cos(x3 + M_PI / 4))) *
+        r / 2;
+    derivatives[CINDEX(2)] =
+        ((x4 * cos(x3 + M_PI / 4)) - (x5 * sin(x3 + M_PI / 4)) -
+         (x6 * cos(x3 + M_PI / 4)) + (x7 * sin(x3 + M_PI / 4))) *
+        r / 2;
     derivatives[CINDEX(3)] = (x4 + x5 + x6 + x7) * r / (4 * R);
 
-    double a = (M * i + 4 * M * m * R * R + 3 * m * i + 8 * m * m * R * R) / (M + m);
+    double a =
+        (M * i + 4 * M * m * R * R + 3 * m * i + 8 * m * m * R * R) / (M + m);
     double b = -i;
     double c = (M * i + 4 * M * m * R * R - m * i) / (M + m);
     double d = 1 / (2 * m * r * r * (i + 2 * m * R * R));
@@ -98,11 +110,15 @@ void dae(adouble *derivatives, adouble *path, adouble *states, adouble *controls
     derivatives[CINDEX(6)] = (c * u1 + b * u2 + a * u3 + b * u4) * d;
     derivatives[CINDEX(7)] = (b * u1 + c * u2 + b * u3 + a * u4) * d;
 
-    path[CINDEX(1)] = (x4 + x5 + x6 + x7) * r / (4 * R);       // d/dt theta
-    path[CINDEX(2)] = (a * u1 + b * u2 + c * u3 + b * u4) * d; // d^2/dt^2 phi_1
-    path[CINDEX(3)] = (b * u1 + a * u2 + b * u3 + c * u4) * d; // d^2/dt^2 phi_2
-    path[CINDEX(4)] = (c * u1 + b * u2 + a * u3 + b * u4) * d; // d^2/dt^2 phi_3
-    path[CINDEX(5)] = (b * u1 + c * u2 + b * u3 + a * u4) * d; // d^2/dt^2 phi_4
+    path[CINDEX(1)] = (x4 + x5 + x6 + x7) * r / (4 * R);  // d/dt theta
+    path[CINDEX(2)] =
+        (a * u1 + b * u2 + c * u3 + b * u4) * d;  // d^2/dt^2 phi_1
+    path[CINDEX(3)] =
+        (b * u1 + a * u2 + b * u3 + c * u4) * d;  // d^2/dt^2 phi_2
+    path[CINDEX(4)] =
+        (c * u1 + b * u2 + a * u3 + b * u4) * d;  // d^2/dt^2 phi_3
+    path[CINDEX(5)] =
+        (b * u1 + c * u2 + b * u3 + a * u4) * d;  // d^2/dt^2 phi_4
 
 // ステージ上でロボットが通れない障害物
 #ifdef RED_ZONE
@@ -140,9 +156,9 @@ void dae(adouble *derivatives, adouble *path, adouble *states, adouble *controls
 ///////////////////  Define the events function ////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-void events(adouble *e, adouble *initial_states, adouble *final_states, adouble *parameters, adouble &t0, adouble &tf,
-            adouble *xad, int iphase, Workspace *workspace)
-{
+void events(adouble *e, adouble *initial_states, adouble *final_states,
+            adouble *parameters, adouble &t0, adouble &tf, adouble *xad,
+            int iphase, Workspace *workspace) {
     adouble x10 = initial_states[CINDEX(1)];
     adouble x20 = initial_states[CINDEX(2)];
     adouble x30 = initial_states[CINDEX(3)];
@@ -178,8 +194,7 @@ void events(adouble *e, adouble *initial_states, adouble *final_states, adouble 
 ///////////////////  Define the phase linkages function ///////////////////
 ///////////////////////////////////////////////////////////////////////////
 
-void linkages(adouble *linkages, adouble *xad, Workspace *workspace)
-{
+void linkages(adouble *linkages, adouble *xad, Workspace *workspace) {
     // No linkages as this is a single phase problem
 }
 
@@ -187,9 +202,7 @@ void linkages(adouble *linkages, adouble *xad, Workspace *workspace)
 ///////////////////  Define the main routine ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-int main(void)
-{
-
+int main(void) {
     ////////////////////////////////////////////////////////////////////////////
     ///////////////////  Declare key structures ////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////
@@ -216,7 +229,8 @@ int main(void)
     psopt_level1_setup(problem);
 
     /////////////////////////////////////////////////////////////////////////////
-    /////////   Define phase related information & do level 2 setup /////////////
+    /////////   Define phase related information & do level 2 setup
+    ////////////////
     /////////////////////////////////////////////////////////////////////////////
 
     problem.phases(1).nstates = 7;
@@ -259,19 +273,19 @@ int main(void)
         pp3     5.702 0.800             pp3     2.050 0.550
         pp4     5.702 0.530             pp4     2.050 0.550
         pp5     5.754 0.462 -2*M_PI/15  pp5     2.050 0.550
-    
+
         kz      2.695 2.145 -2.768
                 2.706 2.156 -2.740
         kz2     2.808 1.850 -2.722
         kz3     3.043 1.631 -2.689
     */
 
-    double first_x      = 1.000;
-    double first_y      = 2.000;
-    double first_theta  = M_PI/4;
-    double final_x      = 5.770;
-    double final_y      = 3.140;
-    double final_theta  = M_PI/4;
+    double first_x = 1.000;
+    double first_y = 2.000;
+    double first_theta = M_PI / 4;
+    double final_x = 5.770;
+    double final_y = 3.140;
+    double final_theta = M_PI / 4;
 
 #ifdef RED_ZONE
     problem.phases(1).bounds.lower.states(1) = 0.55;
@@ -291,7 +305,6 @@ int main(void)
     problem.phases(1).bounds.lower.states(6) = -10 * M_PI;
     problem.phases(1).bounds.lower.states(7) = -10 * M_PI;
 
-    
     problem.phases(1).bounds.upper.states(3) = 2 * M_PI;
     problem.phases(1).bounds.upper.states(4) = 10 * M_PI;
     problem.phases(1).bounds.upper.states(5) = 10 * M_PI;
@@ -315,15 +328,16 @@ int main(void)
     problem.phases(1).bounds.lower.events(5) = 0.0;
     problem.phases(1).bounds.lower.events(6) = 0.0;
     problem.phases(1).bounds.lower.events(7) = 0.0;
-    problem.phases(1).bounds.lower.events(8) = final_x; // final x
-    problem.phases(1).bounds.lower.events(9) = final_y; // final y
-    problem.phases(1).bounds.lower.events(10) = final_theta; // final theta
+    problem.phases(1).bounds.lower.events(8) = final_x;       // final x
+    problem.phases(1).bounds.lower.events(9) = final_y;       // final y
+    problem.phases(1).bounds.lower.events(10) = final_theta;  // final theta
     problem.phases(1).bounds.lower.events(11) = 0.0;  // final d/dt phi_1
     problem.phases(1).bounds.lower.events(12) = 0.0;  // final d/dt phi_2
     problem.phases(1).bounds.lower.events(13) = 0.0;  // final d/dt phi_3
     problem.phases(1).bounds.lower.events(14) = 0.0;  // final d/dt phi_4
 
-    problem.phases(1).bounds.upper.events = problem.phases(1).bounds.lower.events;
+    problem.phases(1).bounds.upper.events =
+        problem.phases(1).bounds.lower.events;
 
     problem.phases(1).bounds.lower.path(1) = -M_PI / 4;
     problem.phases(1).bounds.upper.path(1) = M_PI / 4;
@@ -382,13 +396,13 @@ int main(void)
     int nnodes = (int)problem.phases(1).nodes(1);
 
     DMatrix x0(7, nnodes);
-    x0(1, colon()) = linspace(first_x, final_x, nnodes); // x
-    x0(2, colon()) = linspace(first_y, final_y, nnodes); // y
-    x0(3, colon()) = linspace(first_theta, final_theta, nnodes); // theta
-    x0(4, colon()) = linspace(0.0, 0.0, nnodes); // d/dt phi_1
-    x0(5, colon()) = linspace(0.0, 0.0, nnodes); // d/dt phi_2
-    x0(6, colon()) = linspace(0.0, 0.0, nnodes); // d/dt phi_3
-    x0(7, colon()) = linspace(0.0, 0.0, nnodes); // d/dt phi_4
+    x0(1, colon()) = linspace(first_x, final_x, nnodes);          // x
+    x0(2, colon()) = linspace(first_y, final_y + 1, nnodes);      // y
+    x0(3, colon()) = linspace(first_theta, final_theta, nnodes);  // theta
+    x0(4, colon()) = linspace(0.0, 0.0, nnodes);                  // d/dt phi_1
+    x0(5, colon()) = linspace(0.0, 0.0, nnodes);                  // d/dt phi_2
+    x0(6, colon()) = linspace(0.0, 0.0, nnodes);                  // d/dt phi_3
+    x0(7, colon()) = linspace(0.0, 0.0, nnodes);                  // d/dt phi_4
 
     DMatrix u0(4, nnodes);
     u0(1, colon()) = linspace(0.0, 0.0, nnodes);
@@ -416,8 +430,7 @@ int main(void)
 
     psopt(solution, problem, algorithm);
 
-    if (solution.error_flag)
-        exit(0);
+    if (solution.error_flag) exit(0);
 
     ////////////////////////////////////////////////////////////////////////////
     ///////////  Extract relevant variables from solution structure   //////////
@@ -433,23 +446,19 @@ int main(void)
     vector<double> b(nnodes - 1, 0.0);
     vector<vector<double>> fine_path;
 
-    for (int i = 0; i < 3; i++)
-    {
-        for (int j = 0; j < nnodes - 1; j++)
-        {
-            a[j] = (x.elem(i + 1, j + 2) - x.elem(i + 1, j + 1)) / (t.elem(1, j + 2) - t.elem(1, j + 1));
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < nnodes - 1; j++) {
+            a[j] = (x.elem(i + 1, j + 2) - x.elem(i + 1, j + 1)) /
+                   (t.elem(1, j + 2) - t.elem(1, j + 1));
             b[j] = x.elem(i + 1, j + 1);
         }
 
         fine_path.emplace_back();
         fine_path[i].push_back(x.elem(i + 1, 1));
 
-        for (double t_ = dt; t_ < t.elem(1, nnodes); t_ += dt)
-        {
-            for (int j = 1; j < nnodes - 1; j++)
-            {
-                if (t_ < t.elem(1, j + 1))
-                {
+        for (double t_ = dt; t_ < t.elem(1, nnodes); t_ += dt) {
+            for (int j = 1; j < nnodes - 1; j++) {
+                if (t_ < t.elem(1, j + 1)) {
                     fine_path[i].push_back(a[j] * (t_ - t.elem(1, j)) + b[j]);
                     break;
                 }
@@ -458,11 +467,10 @@ int main(void)
         fine_path[i].push_back(x.elem(i + 1, nnodes));
     }
 
-    for (int i = 0; i < fine_path[2].size(); i++)
-    {
-        if(fine_path[2][i] > M_PI){
+    for (unsigned int i = 0; i < fine_path[2].size(); i++) {
+        if (fine_path[2][i] > M_PI) {
             fine_path[2][i] -= 2 * M_PI;
-        }else if(fine_path[2][i] < -M_PI){
+        } else if (fine_path[2][i] < -M_PI) {
             fine_path[2][i] += 2 * M_PI;
         }
     }
@@ -471,10 +479,8 @@ int main(void)
     cout << "path has " << fine_path[0].size() << " poses" << endl;
 
     ofstream ofs("path.csv");
-    for (unsigned int i = 0; i < fine_path[0].size(); i++)
-    {
-        for (unsigned int j = 0; j < fine_path.size(); j++)
-        {
+    for (unsigned int i = 0; i < fine_path[0].size(); i++) {
+        for (unsigned int j = 0; j < fine_path.size(); j++) {
             ofs << fine_path[j][i];
             ofs << ",";
         }
@@ -501,25 +507,32 @@ int main(void)
 
     plot(pos_x, pos_y, problem.name + ": x-y trajectory", "x", "y", "pos");
 
-    plot(t, pos, problem.name + ": pose", "time (s)", "pose[m, rad]", "x1 x2 x3");
+    plot(t, pos, problem.name + ": pose", "time (s)", "pose[m, rad]",
+         "x1 x2 x3");
 
-    plot(t, vel, problem.name + ": wheel velocity", "time (s)", "angular velocity[rad/s]", "x4 x5 x6 x7");
+    plot(t, vel, problem.name + ": wheel velocity", "time (s)",
+         "angular velocity[rad/s]", "x4 x5 x6 x7");
 
-    plot(t, u, problem.name + ": control", "time (s)", "control", "u1 u2 u3 u4");
+    plot(t, u, problem.name + ": control", "time (s)", "control",
+         "u1 u2 u3 u4");
 
-    plot(pos_x, pos_y, problem.name + ": x-y trajectory", "x", "y", "pos", "pdf", "xy.pdf");
+    plot(pos_x, pos_y, problem.name + ": x-y trajectory", "x", "y", "pos",
+         "pdf", "xy.pdf");
 
-    plot(t, pos, problem.name + ": pose", "time (s)", "pose[m, rad]", "x1 x2 x3", "pdf", "status_pos.pdf");
+    plot(t, pos, problem.name + ": pose", "time (s)", "pose[m, rad]",
+         "x1 x2 x3", "pdf", "status_pos.pdf");
 
-    plot(t, vel, problem.name + ": wheel velocity", "time (s)", "angular velocity[rad/s]", "x4 x5 x6 x7", "pdf", "states_wheelVel.pdf");
+    plot(t, vel, problem.name + ": wheel velocity", "time (s)",
+         "angular velocity[rad/s]", "x4 x5 x6 x7", "pdf",
+         "states_wheelVel.pdf");
 
-    plot(t, u, problem.name + ": control", "time (s)", "control", "u1 u2 u3 u4", "pdf", "control.pdf");
+    plot(t, u, problem.name + ": control", "time (s)", "control", "u1 u2 u3 u4",
+         "pdf", "control.pdf");
 
-#else 
+#else
     ////////////////////////////////////////////////////////////////////////////////
     // GLFW の初期化 (GLFW)
-    if (glfwInit() == GL_FALSE)
-    {
+    if (glfwInit() == GL_FALSE) {
         // 初期化に失敗した処理
         std::cerr << "Can't initialize GLFW" << std::endl;
         return 1;
@@ -531,13 +544,13 @@ int main(void)
 
     ////////////////////////////////////////////////////////////////////////////////
     // ウィンドウを作成 (GLFW)
-    GLFWwindow *const window(glfwCreateWindow(/* int           width   = */ 670,
-                                              /* int           height  = */ 1010,
-                                              /* const char  * title   = */ "ぱすぷらくん",
-                                              /* GLFWmonitor * monitor = */ NULL,
-                                              /* GLFWwindow  * share   = */ NULL));
-    if (window == NULL)
-    {
+    GLFWwindow *const window(
+        glfwCreateWindow(/* int           width   = */ 670,
+                         /* int           height  = */ 1010,
+                         /* const char  * title   = */ "ぱすぷらくん",
+                         /* GLFWmonitor * monitor = */ NULL,
+                         /* GLFWwindow  * share   = */ NULL));
+    if (window == NULL) {
         // ウィンドウ作成に失敗した処理
         std::cerr << "Can't create GLFW window." << std::endl;
         return 1;
@@ -554,14 +567,14 @@ int main(void)
     ////////////////////////////////////////////////////////////////////////////////
 
     // ウィンドウが開いている間繰り返す
-    while (glfwWindowShouldClose(/* GLFWwindow * window = */ window) == GL_FALSE)
-    {
+    while (glfwWindowShouldClose(/* GLFWwindow * window = */ window) ==
+           GL_FALSE) {
         // ループ処理
         // 画面の初期化
         glClearColor(0.2f, 0.2f, 0.2f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // 描画処理
+// 描画処理
 #ifdef RED_ZONE
         drawRedField();
 #else
@@ -569,54 +582,50 @@ int main(void)
 #endif
 
         // ロボットの描画
-        for (unsigned int i = 1; i < fine_path[0].size(); i += 150)
-        {
-            float robot_width = 70; // [cm]
+        int skip = 150;
+        for (unsigned int i = 1; i < fine_path[0].size(); i += skip) {
+            float robot_width = 70;  // [cm]
             float x0 = (float)fine_path[0][i - 1] * 100;
             float y0 = (float)fine_path[1][i - 1] * 100;
             float theta0 = (float)fine_path[2][i - 1];
             float x1 = x0 + cos(theta0) * robot_width / 2;
             float y1 = y0 + sin(theta0) * robot_width / 2;
-            float x2 = x0 + cos(theta0) * (robot_width / 2)         - sin(theta0) * (robot_width / 2 - 10);
-            float y2 = y0 + sin(theta0) * (robot_width / 2)         + cos(theta0) * (robot_width / 2 - 10);
-            float x3 = x0 + cos(theta0) * (robot_width / 2 - 10)    - sin(theta0) * (robot_width / 2);
-            float y3 = y0 + sin(theta0) * (robot_width / 2 - 10)    + cos(theta0) * (robot_width / 2);
-            float x4 = x0 + cos(theta0) * (-robot_width / 2 + 10)   - sin(theta0) * (robot_width / 2);
-            float y4 = y0 + sin(theta0) * (-robot_width / 2 + 10)   + cos(theta0) * (robot_width / 2);
-            float x5 = x0 + cos(theta0) * (-robot_width / 2)        - sin(theta0) * (robot_width / 2 - 10);
-            float y5 = y0 + sin(theta0) * (-robot_width / 2)        + cos(theta0) * (robot_width / 2 - 10);
-            float x6 = x0 + cos(theta0) * (-robot_width / 2)        - sin(theta0) * (-robot_width / 2 + 10);
-            float y6 = y0 + sin(theta0) * (-robot_width / 2)        + cos(theta0) * (-robot_width / 2 + 10);
-            float x7 = x0 + cos(theta0) * (-robot_width / 2 + 10)   - sin(theta0) * (-robot_width / 2);
-            float y7 = y0 + sin(theta0) * (-robot_width / 2 + 10)   + cos(theta0) * (-robot_width / 2);
-            float x8 = x0 + cos(theta0) * (robot_width / 2 - 10)    - sin(theta0) * (-robot_width / 2);
-            float y8 = y0 + sin(theta0) * (robot_width / 2 - 10)    + cos(theta0) * (-robot_width / 2);
-            float x9 = x0 + cos(theta0) * (robot_width / 2)         - sin(theta0) * (-robot_width / 2 + 10);
-            float y9 = y0 + sin(theta0) * (robot_width / 2)         + cos(theta0) * (-robot_width / 2 + 10);
+            float x2 = x0 + cos(theta0) * (robot_width / 2) -
+                       sin(theta0) * (robot_width / 2 - 10);
+            float y2 = y0 + sin(theta0) * (robot_width / 2) +
+                       cos(theta0) * (robot_width / 2 - 10);
+            float x3 = x0 + cos(theta0) * (robot_width / 2 - 10) -
+                       sin(theta0) * (robot_width / 2);
+            float y3 = y0 + sin(theta0) * (robot_width / 2 - 10) +
+                       cos(theta0) * (robot_width / 2);
+            float x4 = x0 + cos(theta0) * (-robot_width / 2 + 10) -
+                       sin(theta0) * (robot_width / 2);
+            float y4 = y0 + sin(theta0) * (-robot_width / 2 + 10) +
+                       cos(theta0) * (robot_width / 2);
+            float x5 = x0 + cos(theta0) * (-robot_width / 2) -
+                       sin(theta0) * (robot_width / 2 - 10);
+            float y5 = y0 + sin(theta0) * (-robot_width / 2) +
+                       cos(theta0) * (robot_width / 2 - 10);
+            float x6 = x0 + cos(theta0) * (-robot_width / 2) -
+                       sin(theta0) * (-robot_width / 2 + 10);
+            float y6 = y0 + sin(theta0) * (-robot_width / 2) +
+                       cos(theta0) * (-robot_width / 2 + 10);
+            float x7 = x0 + cos(theta0) * (-robot_width / 2 + 10) -
+                       sin(theta0) * (-robot_width / 2);
+            float y7 = y0 + sin(theta0) * (-robot_width / 2 + 10) +
+                       cos(theta0) * (-robot_width / 2);
+            float x8 = x0 + cos(theta0) * (robot_width / 2 - 10) -
+                       sin(theta0) * (-robot_width / 2);
+            float y8 = y0 + sin(theta0) * (robot_width / 2 - 10) +
+                       cos(theta0) * (-robot_width / 2);
+            float x9 = x0 + cos(theta0) * (robot_width / 2) -
+                       sin(theta0) * (-robot_width / 2 + 10);
+            float y9 = y0 + sin(theta0) * (robot_width / 2) +
+                       cos(theta0) * (-robot_width / 2 + 10);
 
             GLfloat vtx[] = {
-                x0,
-                y0,
-                x1,
-                y1,
-                x2,
-                y2,
-                x3,
-                y3,
-                x4,
-                y4,
-                x5,
-                y5,
-                x6,
-                y6,
-                x7,
-                y7,
-                x8,
-                y8,
-                x9,
-                y9,
-                x1,
-                y1,
+                x0, y0, x1, y1, x2, y2, x3, y3, x4, y4, x5,
+                y5, x6, y6, x7, y7, x8, y8, x9, y9, x1, y1,
             };
 
             glVertexPointer(2, GL_FLOAT, 0, vtx);
@@ -626,13 +635,19 @@ int main(void)
             glEnableClientState(GL_VERTEX_ARRAY);
             glDrawArrays(GL_LINE_LOOP, 0, 11);
             glDisableClientState(GL_VERTEX_ARRAY);
+
+            // カラーバッファ入れ替え <= ダブルバッファリング (GLFW)
+            glfwSwapBuffers(window);
+
+            unsigned int dt_us = dt * 1000000 * skip;
+            usleep(dt_us);
         }
 
-        // カラーバッファ入れ替え <= ダブルバッファリング (GLFW)
-        glfwSwapBuffers(window);
-
-        // イベント待ち (GLFW)
-        glfwWaitEvents();
+        // // カラーバッファ入れ替え <= ダブルバッファリング (GLFW)
+        // glfwSwapBuffers(window);
+        // usleep(10000);
+        // // イベント待ち (GLFW)
+        glfwWaitEventsTimeout(0.001);
     }
 #endif
 }
